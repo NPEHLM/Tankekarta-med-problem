@@ -30,7 +30,6 @@
         }
         #mindmap-container {
             position: relative;
-            /* width and height are now managed dynamically for export */
             width: 100%;
             height: 100%;
             overflow: hidden;
@@ -51,7 +50,7 @@
             align-items: center;
             justify-content: center;
             text-align: center;
-            transition: border-color 0.2s, box-shadow 0.2s, filter 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s, filter 0.2s, background-color 0.2s;
             user-select: none;
             z-index: 10;
         }
@@ -372,12 +371,23 @@
             let editorTarget = null;
             let isLinkingMode = false;
             let linkStartNodeId = null;
-            let showArrows = false;
-
+            let showArrows = true;
+            
             let historyStack = [];
             let historyIndex = -1;
             let mindmapName = '';
             let currentBgColor = '#f0f4f8';
+
+            const levelColors = [
+                '#ffffff', // Nivå 0 (root)
+                '#caffbf', // Nivå 1 (grön)
+                '#9bf6ff', // Nivå 2 (cyan)
+                '#a0c4ff', // Nivå 3 (blå)
+                '#bdb2ff', // Nivå 4 (lila)
+                '#ffc6ff', // Nivå 5 (rosa)
+                '#ffd6a5', // Nivå 6 (orange)
+                '#fdffb6'  // Nivå 7 (gul)
+            ];
 
             // --- Modal Logic ---
             const genericModal = document.getElementById('generic-modal');
@@ -429,6 +439,16 @@
 
             // --- Core Mindmap Logic ---
             new PlainDraggable(controls, { handle: controls });
+            
+            function getNodeLevel(nodeId) {
+                let level = 0;
+                let currentNode = nodes[nodeId];
+                while (currentNode && currentNode.parentId && nodes[currentNode.parentId]) {
+                    level++;
+                    currentNode = nodes[currentNode.parentId];
+                }
+                return level;
+            }
 
             function getContrastColor(hex, forLines = false) {
                 if (!hex) return forLines ? '#718096' : '#2d3748';
@@ -539,7 +559,8 @@
                 const lineId = `${startId}-${endId}`;
                 if (lines[lineId]) lines[lineId].remove();
                 const lineColor = getContrastColor(currentBgColor, true);
-                const line = new LeaderLine(startEl, endEl, { 
+                const line = new LeaderLine(startEl, endEl, {
+                    parent: container, 
                     color: lineColor, 
                     size: 2, 
                     path: 'fluid', 
@@ -565,8 +586,6 @@
                 const node = nodes[id];
                  if (!node) return;
                 Object.values(lines).forEach(line => {
-                    // This is a bit brute-force, but LeaderLine doesn't give direct access to start/end elements
-                    // We check if the line's SVG element ID contains the node's ID.
                     const lineId = Object.keys(lines).find(key => lines[key] === line);
                     if (lineId && (lineId.startsWith(id + '-') || lineId.endsWith('-' + id))) {
                          try { line.position(); } catch (e) { console.warn("Could not reposition line", e); }
@@ -747,7 +766,7 @@
 
             function updateButtonStates() {
                 const isNodeSelected = selectedNodeId !== null && nodes[selectedNodeId];
-                addChildBtn.disabled = !isNodeSelected;
+                addChildBtn.disabled = Object.keys(nodes).length === 0;
                 deleteNodeBtn.disabled = !isNodeSelected || Object.keys(nodes).length === 1;
                 colorPicker.disabled = !isNodeSelected;
                 addImageBtn.disabled = !isNodeSelected;
@@ -779,15 +798,25 @@
             deleteNodeBtn.addEventListener('click', () => { if (selectedNodeId && nodes[selectedNodeId]) { deleteNode(selectedNodeId); saveState(); } });
             
             addChildBtn.addEventListener('click', () => {
-                if (!selectedNodeId) return;
-                const parentNode = nodes[selectedNodeId];
+                const parentId = selectedNodeId || 'root';
+                const parentNode = nodes[parentId];
+                if (!parentNode) {
+                    console.error("Kunde inte hitta en föräldranod att koppla till.");
+                    return;
+                }
                 const newId = `node-${Date.now()}`;
                 const newX = parentNode.x + 200;
                 const newY = parentNode.y + parentNode.childrenIds.length * 60;
-                createNode(newId, 'Ny nod', newX, newY, selectedNodeId, parentNode.bgColor, parentNode.shape, 0, null, []);
+                
+                const parentLevel = getNodeLevel(parentId);
+                const newLevel = parentLevel + 1;
+                const newColor = levelColors[newLevel % levelColors.length];
+
+                createNode(newId, 'Ny nod', newX, newY, parentId, newColor, parentNode.shape, 0, null, []);
                 selectNode(newId);
                 saveState();
             });
+
             colorPicker.addEventListener('input', (e) => {
                 if (!selectedNodeId) return;
                 const node = nodes[selectedNodeId];
@@ -857,7 +886,8 @@
                 if (e.target !== container) return;
                 const newId = `node-${Date.now()}`;
                 const rect = container.getBoundingClientRect();
-                createNode(newId, 'Ny idé', e.clientX - rect.left, e.clientY - rect.top, null, '#ffffff', 'rect', 0, null, []);
+                const newColor = levelColors[0]; // Fristående noder är nivå 0
+                createNode(newId, 'Ny idé', e.clientX - rect.left, e.clientY - rect.top, null, newColor, 'rect', 0, null, []);
                 selectNode(newId);
                 saveState();
             });
@@ -923,10 +953,13 @@
                 nodes = {};
                 lines = {};
 
-                if (state && state.nodes) {
-                    showArrows = state.showArrows || false;
-                    toggleArrowsBtn.classList.toggle('active', showArrows);
+                // Default arrows to ON if it's a blank slate (new map or clear all).
+                showArrows = true; 
 
+                if (state && state.nodes) {
+                    // If loading a file, respect its setting. Default to true if the setting doesn't exist.
+                    showArrows = typeof state.showArrows !== 'undefined' ? state.showArrows : true; 
+                    
                     state.nodes.forEach(data => createNode(data.id, data.htmlContent, data.x, data.y, null, data.bgColor, data.shape, data.rotation, data.imgSrc, data.manualConnections));
                     state.nodes.forEach(data => {
                         if (data.parentId && nodes[data.parentId]) {
@@ -936,7 +969,8 @@
                         }
                         if (data.manualConnections?.length) { data.manualConnections.forEach(endId => createLine(data.id, endId)); }
                     });
-                }
+                } 
+                toggleArrowsBtn.classList.toggle('active', showArrows);
                 selectNode(null);
                 updateUndoRedoButtons();
             }
@@ -995,7 +1029,7 @@
                 mindmapName = name || 'Min Tankekarta';
                 mindmapTitle.textContent = mindmapName;
                 updateBackgroundColor('#f0f4f8');
-                createNode('root', 'Huvudidé', container.offsetWidth / 2 - 60, container.offsetHeight / 2 - 25);
+                createNode('root', 'Huvudidé', container.offsetWidth / 2 - 60, container.offsetHeight / 2 - 25, null, levelColors[0]);
                 historyStack = [];
                 historyIndex = -1;
                 saveState();
