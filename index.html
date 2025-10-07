@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/plain-draggable@2.5.14/plain-draggable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leader-line-new@1.1.9/leader-line.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -216,6 +215,24 @@
 </head>
 <body class="w-screen h-screen m-0 p-0 overflow-hidden">
 
+    <!-- Start Choice Modal -->
+    <div id="start-choice-modal" class="fixed inset-0 bg-gray-900 bg-opacity-70 z-50 flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md text-center">
+            <h2 class="text-2xl font-bold mb-4">Välkommen till Tankekarta</h2>
+            <p class="mb-8 text-gray-600">Hur vill du börja?</p>
+            <div class="flex flex-col gap-4">
+                <button id="new-choice-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-lg flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                    Starta ny tankekarta
+                </button>
+                <button id="upload-choice-btn" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-lg flex items-center justify-center gap-2">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    Ladda upp fil
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="mindmap-container" class="w-full h-full"></div>
     
     <!-- Modal för att namnge tankekartan -->
@@ -344,6 +361,9 @@
             const nameInput = document.getElementById('name-input');
             const startBtn = document.getElementById('start-btn');
             const mindmapTitle = document.getElementById('mindmap-title');
+            const startChoiceModal = document.getElementById('start-choice-modal');
+            const newChoiceBtn = document.getElementById('new-choice-btn');
+            const uploadChoiceBtn = document.getElementById('upload-choice-btn');
 
             // State variables
             let nodes = {};
@@ -1053,9 +1073,25 @@
             });
             
             openBtn.addEventListener('click', () => openFileInput.click());
+            
+            newChoiceBtn.addEventListener('click', () => {
+                startChoiceModal.style.display = 'none';
+                nameModal.classList.remove('hidden');
+                nameInput.value = '';
+                nameInput.focus();
+            });
+
+            uploadChoiceBtn.addEventListener('click', () => {
+                startChoiceModal.style.display = 'none';
+                openFileInput.click();
+            });
+            
             openFileInput.addEventListener('change', (event) => {
                 const file = event.target.files[0];
-                if (!file) return;
+                if (!file) {
+                    startChoiceModal.style.display = 'flex'; // Show start modal again if user cancels
+                    return;
+                }
 
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -1079,13 +1115,9 @@
             });
 
             // --- Initial load ---
-            nameModal.classList.remove('hidden');
-            nameInput.focus();
             setupTitleEditing();
         });
     </script>
 </body>
 </html>
-
-
 
